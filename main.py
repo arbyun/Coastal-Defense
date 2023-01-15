@@ -1,13 +1,18 @@
 import math
 import random
-import time
-import pygame
 import sys
+import pygame
+from pygame.locals import *
 from pygame import gfxdraw
 
-# Initialize Pygame and set the window size
+# Initialize pygame
 pygame.init()
-screen = pygame.display.set_mode((1000, 380))
+
+# Set the window size
+window_size = (1000, 380)
+
+# Create the window
+screen = pygame.display.set_mode(window_size)
 
 # Set the colors for the shapes
 WHITE = (255, 255, 255)
@@ -39,47 +44,15 @@ collision_delay_timer = collision_delay
 enemies = []
 
 # Set the enemy speed
-enemy_speed = 3.5
+enemy_speed = 1.5
 
+gravity = 9.8
 
-class Projectile(pygame.sprite.Sprite):
-    def __init__(self, x, y, angle):
-        pygame.sprite.Sprite.__init__(self)
-        self.image = pygame.draw.rect(screen, WHITE, (0, 0, 10, 10))
-        self.center = (x, y)
-        self.angle = angle
-        self.speed = 3
-        self.x = x
-        self.y = y
-
-    def update(self):
-        self.x += self.speed * math.cos(math.radians(self.angle))
-        self.y += self.speed * math.sin(math.radians(self.angle))
-        self.center = (self.x, self.y)
-        self.draw()
-
-    def draw(self):
-        pygame.draw.rect(screen, WHITE, (self.x, self.y, 10, 10))
-
-
-# Draw the player area at the bottom of the screen
-player_rect = pygame.Rect(0, 280, 100, 100)
-pygame.draw.rect(screen, WHITE, player_rect)
-
-# Draw the cannon on top of the player area (collides with the player area)
-cannon_base_rect = pygame.Rect(player_rect.centerx - 10, player_rect.top - 20, 10, 20)
-pygame.draw.rect(screen, BLUE, cannon_base_rect)
-# Draw the cannon barrel in the middle front of the cannon base
-cannon_barrel_rect = pygame.Rect(cannon_base_rect.centerx - 5, cannon_base_rect.centery - 20, 30, 10)
-pygame.draw.rect(screen, BLUE, cannon_barrel_rect)
-
-# Draw the enemy area
-enemy_area_rect = pygame.Rect(140, 300, 860, 360 // 4)
-pygame.draw.rect(screen, BLUE, enemy_area_rect)
-
-# Draw the danger zone
 danger_zone_rect = pygame.Rect(100, 280, 50, 100)
-pygame.draw.rect(screen, GREEN, danger_zone_rect)
+player_rect = pygame.Rect(0, 280, 100, 100)
+cannon_base_rect = pygame.Rect(player_rect.centerx - 10, player_rect.top - 20, 10, 20)
+cannon_barrel_rect = pygame.Rect(cannon_base_rect.centerx - 5, cannon_base_rect.centery - 20, 30, 10)
+enemy_area_rect = pygame.Rect(140, 300, 860, 360 // 4)
 
 # Add the initial enemy boat to the list
 tiny_enemy_rect = pygame.Rect(enemy_area_rect.centerx - 10, enemy_area_rect.top - 5, 20, 10)
@@ -92,7 +65,7 @@ font = pygame.font.SysFont("Arial", 20)
 score = 0
 level = 1
 lives = 3
-heart_image = pygame.image.load("../../../PycharmProjects/CoastalDefense/sprites/Pixel_heart_idle.png")
+heart_image = pygame.image.load("sprites/Pixel_heart_idle.png")
 heart_image = pygame.transform.scale(heart_image, (20, 20))
 
 heart1_pos = (900, 40)
@@ -102,23 +75,6 @@ heart3_pos = (940, 40)
 heart_image1 = {heart_image: heart1_pos}
 heart_image2 = {heart_image: heart2_pos}
 heart_image3 = {heart_image: heart3_pos}
-
-
-
-
-
-''''Bullet'''
-
-p0 = (cannon_barrel_rect.centerx, cannon_barrel_rect.centery)
-
-
-def draw_arc(surface, x, y, radius, start_angle, stop_angle, color):
-    start_angle = int(start_angle % 360)
-    stop_angle = int(stop_angle % 360)
-    if start_angle == stop_angle:
-        gfxdraw.circle(surface, x, y, radius, color)
-    else:
-        gfxdraw.arc(surface, x, y, radius, start_angle, stop_angle, color)
 
 
 def calculate_center(p0, p1):
@@ -133,67 +89,113 @@ def calculate_angle(p0, p1):
     return math.degrees(math.atan2(y1 - y0, x1 - x0))
 
 
-def shoot_bullet(p0, p1):
-    global enemies, new_enemy, score
-    """Shoot a bullet from the cannon."""
+def get_arc_points(p0, p1):
     angle = calculate_angle(p0, p1)
     center = calculate_center(p0, p1)
     end_angle = angle + 180
     center = (math.floor(center[0]), math.floor(center[1]))
     radius = math.floor(math.hypot(center[0] - p0[0], center[1] - p0[1]))
-    arc_color = (255, 0, 0, 0)  # Red with 0% transparency
-    draw_arc(screen, center[0], center[1], radius, angle, end_angle, arc_color)
+    angle = math.floor(angle)
+    end_angle = math.floor(end_angle)
+    arc_color = (255, 255, 255, 100)
+    return center, radius, angle, end_angle, arc_color
 
-    # Set the number of steps to take along the arc
-    steps = 100
 
-    # Set the initial position of the bullet along the arc
-    x, y = center[0] + radius * math.cos(math.radians(angle)), center[1] + radius * math.sin(math.radians(angle))
+# the PREVIEW ARC
+arc_start = (cannon_barrel_rect.centerx, cannon_barrel_rect.centery)
+print(arc_start)
+arc_end = (610, 255)
+arc_center = (math.floor((arc_start[0] + arc_end[0]) / 2), math.floor((arc_start[1] + arc_end[1]) / 2))
+arc_radius = math.floor(math.hypot(arc_center[0] - arc_start[0], arc_center[1] - arc_start[1]))
+arc_angle = 180
+arc_end_angle = 0
+arc_color = (255, 255, 255, 100)
 
-    # Loop through the steps to draw the bullet at different positions along the arc
+bullets = []
+
+
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, screen, color, x, y, radius):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.draw.circle(screen, color, (x, y), radius, 5)
+        self.x = x
+        self.y = y
+        self.rect = self.image
+        self.rect.center = (x, y)
+        self.gravity = 9.8
+        bullets.append(self)
+
+    def kill_bullet(self):
+        self.kill()
+        bullets.remove(self)
+
+
+def shoot_bullet(end_pos):
+    global enemies, new_enemy, score
+    # steps are like the FPS
+    steps = 15
+
+    x, y = end_pos
+
     for i in range(steps):
-        # Calculate the angle at the current step
-        current_angle = angle + (end_angle - angle) * i / steps
+        current_angle = arc_angle + (arc_end_angle - arc_angle) * i / steps
+        x1, y1 = arc_center[0] + arc_radius * math.cos(math.radians(current_angle)), arc_center[
+            1] + arc_radius * math.sin(math.radians(current_angle))
+        bullet = Bullet(screen, RED, x1, y1, 5)
+        x, y = x1, y1
 
-        # Calculate the position of the bullet at the current angle
-        x2 = center[0] + radius * math.cos(math.radians(current_angle))
-        y2 = center[1] + radius * math.sin(math.radians(current_angle))
+        # when it reaches the end of the arc, fall to gravity
+        if i == steps - 1:
+            for j in range(steps):
+                y1 += gravity * j
+                bullet = Bullet(screen, RED, x1, y1, 5)
+                x, y = x1, y1
 
-        # Draw a line between the previous position and the current position
-        line = pygame.draw.line(screen, WHITE, (x, y), (x2, y2), 8)
-
-        # Update the position of the bullet
-        x, y = x2, y2
-
-        # Update the display
-        pygame.display.flip()
-
-        # Clear the screen
-        screen.fill(BLACK)
-
-        # Draw everything again
-        draw_everything_again()
-
-        # Collision detection
-        for enemy in enemies:
-            if enemy.colliderect(line):
-                # Depending on the size of the enemy, add a different amount of points to the score
-                if enemy.width == tiny_enemy_size:
-                    score += 5
-                elif enemy.width == small_enemy_size:
-                    score += 4
-                elif enemy.width == medium_enemy_size:
-                    score += 3
-                elif enemy.width == large_enemy_size:
-                    score += 2
-                elif enemy.width == huge_enemy_size:
-                    score += 1
-                enemies.remove(enemy)
-                new_enemy = True
-                break
+        pygame.display.update()
+        clock.tick(60)
 
 
-def draw_everything_again():
+# Set the charging rate (how quickly the end angle increases)
+charging_rate = 5
+
+# Set the charging limit (maximum end angle)
+charging_limit = 180
+
+# Set the charging flag to False
+is_charging = False
+
+game_over = False
+
+# Run the game loop
+running = True
+while running:
+    # Handle events
+    for event in pygame.event.get():
+        if event.type == QUIT:
+            game_over = True
+        elif event.type == MOUSEBUTTONDOWN:
+            # Set the charging flag to True when the mouse button is pressed
+            is_charging = True
+            arc_angle = 180
+            arc_end_angle = arc_angle
+        elif event.type == MOUSEBUTTONUP:
+            # Set the charging flag to False when the mouse button is released
+            is_charging = False
+            end_pos = (arc_center[0] + arc_radius * math.cos(math.radians(arc_end_angle)),
+                       arc_center[1] + arc_radius * math.sin(math.radians(arc_end_angle)))
+            shoot_bullet(end_pos)
+            arc_end_angle = 0
+            arc_angle = 0
+
+    # Update the arc end angle if the mouse button is being held down
+    if is_charging:
+        arc_end_angle += 5
+        if arc_end_angle < 0:
+            arc_end_angle = 0
+
+    # Clear the screen
+    screen.fill(BLACK)
+
     # Draw score in the top right corner
     score_text = font.render("Score: " + str(score), True, WHITE)
     screen.blit(score_text, (900, 10))
@@ -209,47 +211,22 @@ def draw_everything_again():
     elif lives == 1:
         screen.blit(heart_image, heart1_pos)
 
-    # Draw the enemy area
-    enemy_area_rect = pygame.Rect(140, 300, 860, 360 // 4)
-    pygame.draw.rect(screen, BLUE, enemy_area_rect)
-
-    # Draw the danger zone
-    danger_zone_rect = pygame.Rect(100, 280, 50, 100)
-    pygame.draw.rect(screen, GREEN, danger_zone_rect)
-
-    # Draw the enemy boats
-    for enemy in enemies:
-        pygame.draw.rect(screen, RED, enemy)
-
     # Draw the player area at the bottom of the screen
-    player_rect = pygame.Rect(0, 280, 100, 100)
     pygame.draw.rect(screen, WHITE, player_rect)
 
     # Draw the cannon on top of the player area (collides with the player area)
-    cannon_base_rect = pygame.Rect(player_rect.centerx - 10, player_rect.top - 20, 10, 20)
     pygame.draw.rect(screen, BLUE, cannon_base_rect)
     # Draw the cannon barrel in the middle front of the cannon base
-    cannon_barrel_rect = pygame.Rect(cannon_base_rect.centerx - 5, cannon_base_rect.centery - 20, 30, 10)
     pygame.draw.rect(screen, BLUE, cannon_barrel_rect)
 
-    # Update the display
-    pygame.display.update()
+    # Draw the enemy area
+    pygame.draw.rect(screen, BLUE, enemy_area_rect)
 
-game_over = False
+    # Draw the danger zone
+    pygame.draw.rect(screen, GREEN, danger_zone_rect)
 
-# Run the game loop
-while True:
-
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            game_over = True
-            pygame.quit()
-            exit()
-
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            # Get mouse position in a tuple of (x, y)
-            mouse_pos = pygame.mouse.get_pos()
-            shoot_bullet(mouse_pos, p0)
+    # Draw the arc
+    gfxdraw.arc(screen, arc_center[0], arc_center[1], arc_radius, arc_angle, arc_end_angle, arc_color)
 
     # Decrement the enemy creation timer
     enemy_creation_timer -= 0.05
@@ -286,6 +263,8 @@ while True:
     # Move the enemy boats left
     for enemy in enemies:
         enemy.x -= enemy_speed
+        # Draw the enemy boats
+        pygame.draw.rect(screen, RED, enemy)
 
         # Check if the enemy has entered the danger zone
         if enemy.colliderect(danger_zone_rect):
@@ -331,34 +310,49 @@ while True:
         collision_delay_timer = collision_delay
         collided = False
 
-    # Clear the screen
-    screen.fill(BLACK)
-
-    # Draw everything again
-    draw_everything_again()
-
-    # Set the frame rate
-    clock = pygame.time.Clock()
-    clock.tick(60)
-
-    # Delay to slow down the game
-    time.sleep(0.01)
+    # Check if the bullet has collided with an enemy
+    for enemy in enemies:
+        for bullet in bullets:
+            if enemy.colliderect(bullet):
+                if enemy.width == tiny_enemy_size:
+                    score += 5
+                elif enemy.width == small_enemy_size:
+                    score += 4
+                elif enemy.width == medium_enemy_size:
+                    score += 3
+                elif enemy.width == large_enemy_size:
+                    score += 2
+                elif enemy.width == huge_enemy_size:
+                    score += 1
+                # Remove the enemy and bullet from their respective lists
+                enemies.remove(enemy)
+                bullet.kill_bullet()
+                new_enemy = True
+                break
 
     # Update the display
-    pygame.display.update()
+    pygame.display.flip()
+
+    clock = pygame.time.Clock()
+    clock.tick(60)
 
     if game_over:
         # Draw the game over text in the middle of the black screen
         screen.fill(BLACK)
         game_over_text = font.render("Game Over", True, WHITE)
-        screen.blit(game_over_text, (screen.get_width() // 2 - game_over_text.get_width() // 2, screen.get_height() // 2 - game_over_text.get_height() // 2))
+        screen.blit(game_over_text, (screen.get_width() // 2 - game_over_text.get_width() // 2,
+                                     screen.get_height() // 2 - game_over_text.get_height() // 2))
 
         # Update the display
         pygame.display.update()
 
         # Wait for 5 seconds
         pygame.time.wait(5000)
+        running = False
 
         # Quit the game
         pygame.quit()
         sys.exit()
+
+# Quit pygame
+pygame.quit()
