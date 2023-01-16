@@ -70,11 +70,12 @@ def shoot(x1,x2,x21,x22,x31,x32,x41,x42):
     y0=300
     x3=80
     y3=300
-
+# Clacular o seno e o cosseno
     mouse=pygame.mouse.get_pos()
     hipotenosa=np.sqrt(np.square(mouse[0])+np.square(mouse[1]))
     seno=np.divide(380-mouse[1],hipotenosa)
     cosseno=np.divide(mouse[0],hipotenosa)
+
     g=int(9.8)
    
     t=1
@@ -83,10 +84,12 @@ def shoot(x1,x2,x21,x22,x31,x32,x41,x42):
     while x3<1000 and y3>0 and x3>0 and y3<800:
         t=t+1
         screen.fill((0,0,0))
+
+        #formula para o movimento 
         x3=x0+v0*cosseno*t
         y3=y0-v0*t*seno+1/2*g*np.square(t)
         
-
+        #bullet
         pygame.draw.circle(screen,(255,255,255),(x3,y3),5,0)
         background()
         
@@ -127,7 +130,7 @@ while alive>0:
                
         
 
-
+# aumenta a velocidade ao pressionar o botão do rato
     if mouse==True and v0<90:
         v0=v0+5
         
@@ -141,6 +144,8 @@ while alive>0:
                     
     background()
 
+
+#enemy boats
     if x1>200 and  enemy==True:
         x1=x1-1
         x2=x2-1
